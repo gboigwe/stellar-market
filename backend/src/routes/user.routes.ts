@@ -1,17 +1,18 @@
-import { Router, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { z } from "zod";
 import { AuthRequest, authenticate } from "../middleware/auth";
-import { validate } from "../middleware/validation";
-import { asyncHandler } from "../middleware/error";
+import { Response, Router } from "express";
+import { cache, generateUserCacheKey, invalidateCacheKey } from "../lib/cache";
 import {
   getUserByIdParamSchema,
-  updateUserProfileSchema,
-  getUsersQuerySchema,
   getUserJobsQuerySchema,
+  getUsersQuerySchema,
+  updateUserProfileSchema,
 } from "../schemas";
+
+import { PrismaClient } from "@prisma/client";
+import { asyncHandler } from "../middleware/error";
 import { avatarUpload } from "../config/upload";
-import { cache, invalidateCacheKey, generateUserCacheKey } from "../lib/cache";
+import { validate } from "../middleware/validation";
+import { z } from "zod";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -277,17 +278,7 @@ router.get(
           throw new Error("User not found");
         }
 
-        const ratings: number[] = user.reviewsReceived.map((r) => r.rating);
-        const averageRating =
-          ratings.length > 0
-            ? ratings.reduce((a, b) => a + b, 0) / ratings.length
-            : 0;
-
-        return {
-          ...user,
-          averageRating: parseFloat(averageRating.toFixed(1)),
-          reviewCount: ratings.length,
-        };
+        return user;
       });
 
       res.set("X-Cache-Hit", hit.toString());
