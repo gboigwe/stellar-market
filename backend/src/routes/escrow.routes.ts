@@ -27,6 +27,14 @@ router.post("/init-create", authenticate, asyncHandler(async (req: AuthRequest, 
     return res.status(403).json({ error: "Only the client can initialize the escrow." });
   }
 
+  if (!job.deadline) {
+    return res.status(400).json({ error: "Job must have a deadline before initializing escrow." });
+  }
+
+  if (!job.milestones || job.milestones.length === 0) {
+    return res.status(400).json({ error: "Job must have at least one milestone before initializing escrow." });
+  }
+
   const xdr = await ContractService.buildCreateJobTx(
     job.client.walletAddress,
     job.freelancer.walletAddress,
@@ -36,7 +44,7 @@ router.post("/init-create", authenticate, asyncHandler(async (req: AuthRequest, 
       amount: m.amount,
       deadline: Math.floor((m.contractDeadline?.getTime() || (Date.now() + 86400000 * 7)) / 1000)
     })),
-    Math.floor((job as any).deadline.getTime() / 1000)
+    Math.floor(job.deadline.getTime() / 1000)
   );
 
   res.json({ xdr });
