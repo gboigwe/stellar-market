@@ -24,7 +24,7 @@ jest.mock("@prisma/client", () => {
       findMany: jest.fn(),
       count: jest.fn(),
       updateMany: jest.fn(),
-    }
+    },
   };
   return {
     PrismaClient: jest.fn(() => mockPrisma) as any,
@@ -41,7 +41,7 @@ jest.mock("@prisma/client", () => {
       MILESTONE_APPROVED: "MILESTONE_APPROVED",
       DISPUTE_RAISED: "DISPUTE_RAISED",
       DISPUTE_RESOLVED: "DISPUTE_RESOLVED",
-    } as any
+    } as any,
   };
 });
 
@@ -51,8 +51,8 @@ import { UserRole, NotificationType } from "@prisma/client";
 
 jest.mock("../../services/notification.service", () => ({
   NotificationService: {
-    sendNotification: jest.fn().mockResolvedValue({ id: "mock-notif-id" })
-  }
+    sendNotification: jest.fn().mockResolvedValue({ id: "mock-notif-id" }),
+  },
 }));
 
 import { PrismaClient } from "@prisma/client";
@@ -153,8 +153,11 @@ describe("GET /api/messages/unread-count", () => {
     expect(res.body).toEqual({ count: 5 });
     expect(messageMock.count).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ receiverId: USER_TEST_ID, read: false }),
-      })
+        where: expect.objectContaining({
+          receiverId: USER_TEST_ID,
+          read: false,
+        }),
+      }),
     );
   });
 
@@ -230,7 +233,7 @@ describe("GET /api/messages/:userId", () => {
           read: false,
         }),
         data: { read: true },
-      })
+      }),
     );
   });
 

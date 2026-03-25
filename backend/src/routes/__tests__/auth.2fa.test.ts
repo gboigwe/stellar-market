@@ -88,7 +88,7 @@ afterEach(() => jest.clearAllMocks());
 // ─── POST /api/auth/2fa/setup ────────────────────────────────────────────────
 describe("POST /api/auth/2fa/setup", () => {
   it("returns QR code, secret, and backup codes", async () => {
-    userMock.findUnique.mockResolvedValueOnce({ ...baseUser });
+    userMock.findUnique.mockResolvedValue({ ...baseUser });
     userMock.update.mockResolvedValueOnce({ ...baseUser });
 
     const res = await request(app)
@@ -102,7 +102,7 @@ describe("POST /api/auth/2fa/setup", () => {
   });
 
   it("returns 400 if 2FA is already enabled", async () => {
-    userMock.findUnique.mockResolvedValueOnce({ ...baseUser, twoFactorEnabled: true });
+    userMock.findUnique.mockResolvedValue({ ...baseUser, twoFactorEnabled: true });
 
     const res = await request(app)
       .post("/api/auth/2fa/setup")
@@ -121,7 +121,7 @@ describe("POST /api/auth/2fa/setup", () => {
 // ─── POST /api/auth/2fa/verify ───────────────────────────────────────────────
 describe("POST /api/auth/2fa/verify", () => {
   it("enables 2FA with valid TOTP code", async () => {
-    userMock.findUnique.mockResolvedValueOnce({
+    userMock.findUnique.mockResolvedValue({
       ...baseUser,
       twoFactorSecret: `encrypted:${MOCK_SECRET}`,
     });
@@ -140,7 +140,7 @@ describe("POST /api/auth/2fa/verify", () => {
   });
 
   it("returns 400 with invalid code", async () => {
-    userMock.findUnique.mockResolvedValueOnce({
+    userMock.findUnique.mockResolvedValue({
       ...baseUser,
       twoFactorSecret: `encrypted:${MOCK_SECRET}`,
     });
@@ -155,7 +155,7 @@ describe("POST /api/auth/2fa/verify", () => {
   });
 
   it("returns 400 if setup not initiated", async () => {
-    userMock.findUnique.mockResolvedValueOnce({ ...baseUser });
+    userMock.findUnique.mockResolvedValue({ ...baseUser });
 
     const res = await request(app)
       .post("/api/auth/2fa/verify")
@@ -169,7 +169,7 @@ describe("POST /api/auth/2fa/verify", () => {
 // ─── POST /api/auth/login with 2FA ──────────────────────────────────────────
 describe("POST /api/auth/login (2FA enabled)", () => {
   it("returns tempToken when 2FA is enabled", async () => {
-    userMock.findUnique.mockResolvedValueOnce({
+    userMock.findUnique.mockResolvedValue({
       ...baseUser,
       twoFactorEnabled: true,
     });
@@ -189,7 +189,7 @@ describe("POST /api/auth/login (2FA enabled)", () => {
   });
 
   it("returns full token when 2FA is not enabled", async () => {
-    userMock.findUnique.mockResolvedValueOnce({ ...baseUser });
+    userMock.findUnique.mockResolvedValue({ ...baseUser });
 
     const res = await request(app)
       .post("/api/auth/login")
@@ -205,7 +205,7 @@ describe("POST /api/auth/login (2FA enabled)", () => {
 // ─── POST /api/auth/2fa/validate ─────────────────────────────────────────────
 describe("POST /api/auth/2fa/validate", () => {
   it("issues full JWT with valid TOTP code", async () => {
-    userMock.findUnique.mockResolvedValueOnce({
+    userMock.findUnique.mockResolvedValue({
       ...baseUser,
       twoFactorEnabled: true,
       twoFactorSecret: `encrypted:${MOCK_SECRET}`,
@@ -225,7 +225,7 @@ describe("POST /api/auth/2fa/validate", () => {
     const backupCode = "abcd1234";
     const hashedBackup = bcrypt.hashSync(backupCode, 10);
 
-    userMock.findUnique.mockResolvedValueOnce({
+    userMock.findUnique.mockResolvedValue({
       ...baseUser,
       twoFactorEnabled: true,
       twoFactorSecret: "encrypted:somesecret",
@@ -246,7 +246,7 @@ describe("POST /api/auth/2fa/validate", () => {
   });
 
   it("returns 401 with invalid code", async () => {
-    userMock.findUnique.mockResolvedValueOnce({
+    userMock.findUnique.mockResolvedValue({
       ...baseUser,
       twoFactorEnabled: true,
       twoFactorSecret: `encrypted:${MOCK_SECRET}`,
@@ -327,7 +327,7 @@ describe("POST /api/auth/2fa/disable", () => {
   });
 
   it("returns 400 if 2FA not enabled", async () => {
-    userMock.findUnique.mockResolvedValueOnce({ ...baseUser });
+    userMock.findUnique.mockResolvedValue({ ...baseUser });
 
     const res = await request(app)
       .post("/api/auth/2fa/disable")

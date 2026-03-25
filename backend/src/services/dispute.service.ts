@@ -7,7 +7,11 @@ export class DisputeService {
   /**
    * Create a new dispute for a job
    */
-  static async createDispute(jobId: string, initiatorId: string, reason: string) {
+  static async createDispute(
+    jobId: string,
+    initiatorId: string,
+    reason: string,
+  ) {
     // Validate job exists and has both client and freelancer
     const job = await prisma.job.findUnique({
       where: { id: jobId },
@@ -19,7 +23,9 @@ export class DisputeService {
     }
 
     if (!job.freelancer) {
-      throw new Error("Job must have an assigned freelancer to raise a dispute");
+      throw new Error(
+        "Job must have an assigned freelancer to raise a dispute",
+      );
     }
 
     // Verify initiator is a participant
@@ -48,16 +54,37 @@ export class DisputeService {
       },
       include: {
         job: { select: { title: true, budget: true } },
-        client: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-        freelancer: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-        initiator: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
+        client: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
+        freelancer: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
+        initiator: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 
     // Update job status
     await prisma.job.update({
       where: { id: jobId },
-      data: { 
+      data: {
         status: JobStatus.DISPUTED,
         escrowStatus: "DISPUTED",
       },
@@ -73,18 +100,60 @@ export class DisputeService {
     const dispute = await prisma.dispute.findUnique({
       where: { id },
       include: {
-        job: { 
-          include: { 
-            client: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-            freelancer: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-          } 
+        job: {
+          include: {
+            client: {
+              select: {
+                id: true,
+                username: true,
+                walletAddress: true,
+                avatarUrl: true,
+              },
+            },
+            freelancer: {
+              select: {
+                id: true,
+                username: true,
+                walletAddress: true,
+                avatarUrl: true,
+              },
+            },
+          },
         },
-        client: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-        freelancer: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-        initiator: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-        votes: { 
-          include: { 
-            voter: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } } 
+        client: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
+        freelancer: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
+        initiator: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
+        votes: {
+          include: {
+            voter: {
+              select: {
+                id: true,
+                username: true,
+                walletAddress: true,
+                avatarUrl: true,
+              },
+            },
           },
           orderBy: { createdAt: "desc" },
         },
@@ -104,7 +173,7 @@ export class DisputeService {
    */
   static async getDisputes(
     filters: { status?: DisputeStatus },
-    pagination: { page: number; limit: number }
+    pagination: { page: number; limit: number },
   ) {
     const { status } = filters;
     const { page, limit } = pagination;
@@ -117,9 +186,30 @@ export class DisputeService {
         where,
         include: {
           job: { select: { title: true, budget: true } },
-          client: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-          freelancer: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
-          initiator: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
+          client: {
+            select: {
+              id: true,
+              username: true,
+              walletAddress: true,
+              avatarUrl: true,
+            },
+          },
+          freelancer: {
+            select: {
+              id: true,
+              username: true,
+              walletAddress: true,
+              avatarUrl: true,
+            },
+          },
+          initiator: {
+            select: {
+              id: true,
+              username: true,
+              walletAddress: true,
+              avatarUrl: true,
+            },
+          },
           _count: { select: { votes: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -143,7 +233,12 @@ export class DisputeService {
   /**
    * Cast a vote on a dispute
    */
-  static async castVote(disputeId: string, voterId: string, choice: "CLIENT" | "FREELANCER", reason: string) {
+  static async castVote(
+    disputeId: string,
+    voterId: string,
+    choice: "CLIENT" | "FREELANCER",
+    reason: string,
+  ) {
     // Verify dispute exists and is open for voting
     const dispute = await prisma.dispute.findUnique({
       where: { id: disputeId },
@@ -186,7 +281,14 @@ export class DisputeService {
         reason,
       },
       include: {
-        voter: { select: { id: true, username: true, walletAddress: true, avatarUrl: true } },
+        voter: {
+          select: {
+            id: true,
+            username: true,
+            walletAddress: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 
@@ -229,7 +331,9 @@ export class DisputeService {
       include: {
         job: true,
         client: { select: { id: true, username: true, walletAddress: true } },
-        freelancer: { select: { id: true, username: true, walletAddress: true } },
+        freelancer: {
+          select: { id: true, username: true, walletAddress: true },
+        },
         votes: { include: { voter: { select: { username: true } } } },
       },
     });
@@ -237,7 +341,7 @@ export class DisputeService {
     // Update job status
     await prisma.job.update({
       where: { id: dispute.jobId },
-      data: { 
+      data: {
         status: JobStatus.COMPLETED,
         escrowStatus: "COMPLETED",
       },
@@ -259,7 +363,15 @@ export class DisputeService {
     outcome?: string;
     metadata?: Record<string, any>;
   }) {
-    const { type, disputeId, onChainDisputeId, jobId, voterId, choice, outcome } = payload;
+    const {
+      type,
+      disputeId,
+      onChainDisputeId,
+      jobId,
+      voterId,
+      choice,
+      outcome,
+    } = payload;
 
     switch (type) {
       case "DISPUTE_RAISED":
@@ -303,8 +415,10 @@ export class DisputeService {
       select: { choice: true },
     });
 
-    const votesForClient = votes.filter(v => v.choice === "CLIENT").length;
-    const votesForFreelancer = votes.filter(v => v.choice === "FREELANCER").length;
+    const votesForClient = votes.filter((v) => v.choice === "CLIENT").length;
+    const votesForFreelancer = votes.filter(
+      (v) => v.choice === "FREELANCER",
+    ).length;
 
     return {
       total: votes.length,

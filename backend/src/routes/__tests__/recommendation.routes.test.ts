@@ -58,7 +58,7 @@ describe("GET /api/jobs/recommended", () => {
   });
 
   it("returns 403 for non-freelancer users", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({
+    prismaMock.user.findUnique.mockResolvedValue({
       skills: [],
       role: "CLIENT",
     });
@@ -74,7 +74,7 @@ describe("GET /api/jobs/recommended", () => {
   it("returns paginated recommendations for a freelancer", async () => {
     const now = new Date();
 
-    prismaMock.user.findUnique.mockResolvedValueOnce({
+    prismaMock.user.findUnique.mockResolvedValue({
       skills: ["React", "TypeScript"],
       role: "FREELANCER",
     });
@@ -159,7 +159,7 @@ describe("GET /api/jobs/recommended", () => {
   });
 
   it("returns empty results when no jobs match", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({
+    prismaMock.user.findUnique.mockResolvedValue({
       skills: ["React"],
       role: "FREELANCER",
     });
@@ -180,7 +180,7 @@ describe("GET /api/jobs/recommended", () => {
   });
 
   it("respects pagination parameters", async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({
+    prismaMock.user.findUnique.mockResolvedValue({
       skills: ["React"],
       role: "FREELANCER",
     });

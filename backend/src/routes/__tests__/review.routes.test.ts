@@ -17,7 +17,10 @@ var prismaMock = {
         findMany: jest.fn(),
         count: jest.fn(),
     },
-    user: { update: jest.fn() },
+    user: {
+        findUnique: jest.fn(),
+        update: jest.fn(),
+    },
     $transaction: jest.fn(),
 };
 
@@ -56,6 +59,10 @@ function authHeader (userId = REVIEWER_ID) {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    prismaMock.user.findUnique.mockResolvedValue({
+        id: REVIEWER_ID,
+        role: "CLIENT",
+    });
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
 });
 

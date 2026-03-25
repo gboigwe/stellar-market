@@ -75,7 +75,9 @@ describe("authenticate middleware", () => {
     await authenticate(req, res, next);
 
     expect(status).toHaveBeenCalledWith(401);
-    expect(json).toHaveBeenCalledWith({ error: "Access denied. No token provided." });
+    expect(json).toHaveBeenCalledWith({
+      error: "Access denied. No token provided.",
+    });
     expect(next).not.toHaveBeenCalled();
   });
 });

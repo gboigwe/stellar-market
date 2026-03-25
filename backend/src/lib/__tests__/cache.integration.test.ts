@@ -86,6 +86,15 @@ function authHeader(userId = USER_TEST_ID) {
   return { Authorization: `Bearer ${token}` };
 }
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  // Ensure authenticated requests pass the authenticate middleware
+  userMock.findUnique.mockResolvedValue({
+    id: USER_TEST_ID,
+    role: UserRole.CLIENT,
+  });
+});
+
 afterEach(() => jest.clearAllMocks());
 
 describe("Cache Integration Tests", () => {
@@ -245,7 +254,7 @@ describe("Cache Integration Tests", () => {
 
     it("should handle user not found correctly", async () => {
       mockRedis.get.mockResolvedValueOnce(null);
-      userMock.findUnique.mockResolvedValueOnce(null);
+      userMock.findUnique.mockResolvedValue(null);
 
       const res = await request(app)
         .get(`/api/users/${USER_OTHER_ID}`)

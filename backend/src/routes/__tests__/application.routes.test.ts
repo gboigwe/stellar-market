@@ -145,4 +145,3 @@ describe("GET /api/jobs/:jobId/applications", () => {
     );
   });
 });
-

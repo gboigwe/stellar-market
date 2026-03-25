@@ -13,13 +13,17 @@ describe("Dispute routes auth protection", () => {
     const response = await request(app).get("/api/disputes");
 
     expect(response.status).toBe(401);
-    expect(response.body).toEqual({ error: "Access denied. No token provided." });
+    expect(response.body).toEqual({
+      error: "Access denied. No token provided.",
+    });
   });
 
   it("GET /api/disputes/:id returns 401 when unauthenticated", async () => {
     const response = await request(app).get("/api/disputes/test-dispute-id");
 
     expect(response.status).toBe(401);
-    expect(response.body).toEqual({ error: "Access denied. No token provided." });
+    expect(response.body).toEqual({
+      error: "Access denied. No token provided.",
+    });
   });
 });

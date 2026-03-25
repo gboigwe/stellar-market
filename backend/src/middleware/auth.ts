@@ -13,7 +13,7 @@ export interface AuthRequest extends Request {
 export const authenticate = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   const authHeader = req.headers.authorization;
 
@@ -25,7 +25,10 @@ export const authenticate = async (
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, config.jwtSecret) as { userId: string; purpose?: string };
+    const decoded = jwt.verify(token, config.jwtSecret) as {
+      userId: string;
+      purpose?: string;
+    };
 
     if (decoded.purpose === "2fa_pending") {
       res.status(401).json({ error: "2FA verification required." });
@@ -54,7 +57,7 @@ export const authenticate = async (
 export const requireAdmin = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   // First authenticate the user
   const authHeader = req.headers.authorization;
@@ -82,7 +85,9 @@ export const requireAdmin = async (
     }
 
     if (user.role !== UserRole.ADMIN) {
-      res.status(403).json({ error: "Access denied. Admin privileges required." });
+      res
+        .status(403)
+        .json({ error: "Access denied. Admin privileges required." });
       return;
     }
 
@@ -96,7 +101,7 @@ export const requireAdmin = async (
 export const checkSuspension = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   if (!req.userId) {
     next();
