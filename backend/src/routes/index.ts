@@ -13,6 +13,7 @@ import uploadRoutes from "./upload.routes";
 import adminRoutes from "./admin";
 import disputeRoutes from "./dispute.routes";
 import recommendationRoutes from "./recommendation.routes";
+import servicesRoutes from "./services.routes";
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use("/transactions", transactionRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/admin", adminRoutes);
 router.use("/disputes", disputeRoutes);
+router.use("/services", servicesRoutes);
 
 export default router;

@@ -112,6 +112,7 @@ model User {
   initiatedDisputes Dispute[]      @relation("DisputeInitiated")
   respondedDisputes Dispute[]      @relation("DisputeResponded")
   votesCast         Vote[]         @relation("VotesCast")
+  services          Service[]      @relation("FreelancerServices")
 }
 
 model Job {
@@ -309,6 +310,25 @@ model Dispute {
   @@index([initiatorId])
   @@index([respondentId])
   @@index([status])
+}
+
+model Service {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  category     String
+  price        Float
+  deliveryDays Int
+  skills       String[]
+  freelancerId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  freelancer User @relation("FreelancerServices", fields: [freelancerId], references: [id], onDelete: Cascade)
+
+  @@index([freelancerId])
+  @@index([category])
+  @@index([createdAt])
 }
 
 model Vote {
