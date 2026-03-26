@@ -105,6 +105,14 @@ pub struct UserReputation {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReferralBonusRecord {
+    pub amount: u64,
+    pub weight: u64,
+    pub timestamp: u64,
+}
+
+#[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum ReputationTier {
@@ -147,6 +155,7 @@ enum DataKey {
     ReferralStats(Address),
     BonusPaid(Address),
     ReferralBonus,
+    ReferralBonusList(Address),
 }
 
 fn require_not_paused(env: &Env) -> Result<(), ReputationError> {
@@ -536,19 +545,30 @@ impl ReputationContract {
                 MIN_TTL_EXTEND_TO,
             );
 
-            let bonus_rating = env
+            // Credit the reputation score equivalent to the bonus rating
+            // Effectively a high-weight default review.
+            // We now store this as a record for decay calculation.
+            let bonuses_key = DataKey::ReferralBonusList(referrer.clone());
+            let mut bonuses: Vec<ReferralBonusRecord> = env
                 .storage()
-                .instance()
-                .get::<DataKey, u64>(&DataKey::ReferralBonus)
-                .unwrap_or(DEFAULT_REFERRAL_BONUS);
-            let min_stake = env
-                .storage()
-                .instance()
-                .get::<DataKey, i128>(&DataKey::MinStake)
-                .unwrap_or(MIN_REVIEW_STAKE_DEFAULT) as u64;
-            let earned_score = bonus_rating * min_stake;
+                .persistent()
+                .get(&bonuses_key)
+                .unwrap_or(Vec::new(env));
+            
+            bonuses.push_back(ReferralBonusRecord {
+                amount: earned_score,
+                weight: min_stake,
+                timestamp: env.ledger().timestamp(),
+            });
 
-            // Credit the reputation score equivalent to the bonus rating (effectively a high-weight default review)
+            env.storage().persistent().set(&bonuses_key, &bonuses);
+            env.storage().persistent().extend_ttl(
+                &bonuses_key,
+                MIN_TTL_THRESHOLD,
+                MIN_TTL_EXTEND_TO,
+            );
+
+            // Update legacy accumulator (optional but good for redundant check if needed)
             let rep_key = DataKey::Reputation(referrer.clone());
             let mut reputation: UserReputation = env
                 .storage()
@@ -854,6 +874,48 @@ impl ReputationContract {
             total_score += (review.rating as u64) * weight;
             total_weight += weight;
         }
+
+        // Add decayed referral bonuses
+        let bonuses_key = DataKey::ReferralBonusList(user);
+        let bonuses: Vec<ReferralBonusRecord> = env
+            .storage()
+            .persistent()
+            .get(&bonuses_key)
+            .unwrap_or(Vec::new(env));
+
+        let decay_rate: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DecayRate)
+            .unwrap_or(0);
+
+        for bonus in bonuses.iter() {
+            let weight = if decay_rate == 0 {
+                bonus.weight
+            } else {
+                let age_in_seconds = current_time.saturating_sub(bonus.timestamp);
+                let one_year_in_seconds = 31_536_000_u64;
+                let decay_amount = (decay_rate as u64).saturating_mul(age_in_seconds) / one_year_in_seconds;
+                let decay_factor = 100_u64.saturating_sub(decay_amount);
+                
+                if decay_factor == 0 {
+                    0
+                } else {
+                    (bonus.weight.saturating_mul(decay_factor)) / 100
+                }
+            };
+
+            if weight > 0 {
+                // amount is already rating * weight in process_referral_bonus
+                // but wait, earned_score = bonus_rating * min_stake;
+                // so if we decay the weight, we should decay the score too.
+                // Score = bonus_rating * decayed_weight
+                let bonus_rating = bonus.amount / bonus.weight;
+                total_score += bonus_rating * weight;
+                total_weight += weight;
+            }
+        }
+
         (total_score, total_weight, review_count)
     }
 
