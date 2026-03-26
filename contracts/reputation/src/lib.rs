@@ -609,16 +609,22 @@ impl ReputationContract {
         Ok(())
     }
 
-    /// Get the reputation data for a user.
+    /// Get the reputation data for a user, applying time decay to totals.
     pub fn get_reputation(env: Env, user: Address) -> Result<UserReputation, ReputationError> {
-        let rep_key = DataKey::Reputation(user);
-        let reputation: UserReputation = env
-            .storage()
-            .persistent()
-            .get(&rep_key)
-            .ok_or(ReputationError::UserNotFound)?;
-        bump_reputation_ttl(&env, &reputation.user);
-        Ok(reputation)
+        let rep_key = DataKey::Reputation(user.clone());
+        if !env.storage().persistent().has(&rep_key) {
+            return Err(ReputationError::UserNotFound);
+        }
+
+        let (total_score, total_weight, review_count) = Self::get_decayed_totals(&env, user.clone());
+        
+        bump_reputation_ttl(&env, &user);
+        Ok(UserReputation {
+            user,
+            total_score,
+            total_weight,
+            review_count,
+        })
     }
 
     /// Initialize the reputation contract with an admin.
@@ -829,17 +835,13 @@ impl ReputationContract {
         (initial_weight.saturating_mul(decay_factor as i128)) / 100
     }
 
-    pub fn get_average_rating(env: Env, user: Address) -> Result<u64, ReputationError> {
+    /// Internal helper to calculate decayed totals (score, weight, count).
+    fn get_decayed_totals(env: &Env, user: Address) -> (u64, u64, u32) {
         let reviews = Self::get_reviews(env.clone(), user.clone());
-        if reviews.is_empty() {
-            return Ok(0);
-        }
-
-
         let current_time = env.ledger().timestamp();
         let mut total_score: u64 = 0;
         let mut total_weight: u64 = 0;
-
+        let review_count = reviews.len();
 
         for review in reviews.iter() {
             let effective_weight =
@@ -852,12 +854,15 @@ impl ReputationContract {
             total_score += (review.rating as u64) * weight;
             total_weight += weight;
         }
+        (total_score, total_weight, review_count)
+    }
 
-
+    pub fn get_average_rating(env: Env, user: Address) -> Result<u64, ReputationError> {
+        let (total_score, total_weight, _) = Self::get_decayed_totals(&env, user);
+        
         if total_weight == 0 {
             return Ok(0); // If completely decayed, acts as no rep
         }
-
 
         Ok((total_score * 100) / total_weight)
     }
