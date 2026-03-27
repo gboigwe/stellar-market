@@ -39,6 +39,8 @@ pub enum EscrowError {
     ProposalTotalMismatch = 22,
     /// The proposed milestone list is empty.
     EmptyMilestonesProposed = 23,
+    /// The job's stored total_amount does not equal the sum of its milestone amounts.
+    InvalidAmount = 24,
 }
 
 #[contracttype]
@@ -129,7 +131,11 @@ enum DataKey {
     Admin,
     Paused,
     RevisionProposal(u64),
+    ProposalExpiry,
 }
+
+/// Default proposal expiry: 7 days in seconds.
+const DEFAULT_PROPOSAL_EXPIRY_SECS: u64 = 7 * 24 * 3600;
 
 fn get_job_key(job_id: u64) -> DataKey {
     DataKey::Job(job_id)
@@ -182,12 +188,13 @@ pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
-    /// Initialize the contract with admin, treasury, and fee basis points.
+    /// Initialize the contract with admin, treasury, fee basis points, and proposal expiry.
     pub fn initialize(
         env: Env,
         admin: Address,
         treasury: Address,
         fee_bps: u32,
+        proposal_expiry_secs: u64,
     ) -> Result<(), EscrowError> {
         if env.storage().instance().has(&symbol_short!("ADM")) {
             return Err(EscrowError::AlreadyInitialized);
@@ -202,6 +209,9 @@ impl EscrowContract {
             .set(&symbol_short!("TRE"), &treasury);
         env.storage().instance().set(&symbol_short!("FEE"), &fee_bps);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalExpiry, &proposal_expiry_secs);
         bump_job_count_ttl(&env);
 
         Ok(())
@@ -363,6 +373,18 @@ impl EscrowContract {
         }
         if job.status != JobStatus::Created {
             return Err(EscrowError::AlreadyFunded);
+        }
+
+        // Validate that total_amount matches the sum of stored milestone amounts.
+        // Guards against any inconsistency between the two fields (e.g. from a
+        // revision path bug) that would leave milestones unpayable or trap surplus funds.
+        let milestone_sum: i128 = job
+            .milestones
+            .iter()
+            .try_fold(0i128, |acc, m| acc.checked_add(m.amount))
+            .ok_or(EscrowError::InvalidAmount)?;
+        if job.total_amount != milestone_sum {
+            return Err(EscrowError::InvalidAmount);
         }
 
         let token_client = token::Client::new(&env, &job.token);
@@ -903,14 +925,23 @@ impl EscrowContract {
             return Err(EscrowError::NotAuthorizedForProposalAction);
         }
 
-        // 3. Assert no existing Pending proposal
+        // 3. Assert no existing Pending proposal, allowing overwrite of expired ones
         if let Some(existing) = env
             .storage()
             .persistent()
             .get::<DataKey, RevisionProposal>(&DataKey::RevisionProposal(job_id))
         {
             if existing.status == ProposalStatus::Pending {
-                return Err(EscrowError::RevisionProposalAlreadyExists);
+                let expiry_secs: u64 = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::ProposalExpiry)
+                    .unwrap_or(DEFAULT_PROPOSAL_EXPIRY_SECS);
+                let now = env.ledger().timestamp();
+                if now < existing.created_at + expiry_secs {
+                    return Err(EscrowError::RevisionProposalAlreadyExists);
+                }
+                // Expired proposal — fall through to overwrite with new one
             }
         }
 

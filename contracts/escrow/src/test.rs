@@ -1096,7 +1096,7 @@ fn test_initialize_pause() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 }
 
 #[test]
@@ -1111,7 +1111,7 @@ fn test_pause_unauthorized() {
     let admin = Address::generate(&env);
     let non_admin = Address::generate(&env);
 
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
     client.pause(&non_admin);
 }
 
@@ -1124,7 +1124,7 @@ fn test_pause_and_unpause() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1165,7 +1165,7 @@ fn test_create_job_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
     client.pause(&admin);
 
     let user = Address::generate(&env);
@@ -1193,7 +1193,7 @@ fn test_fund_job_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1223,7 +1223,7 @@ fn test_submit_milestone_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1254,7 +1254,7 @@ fn test_approve_milestone_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1286,7 +1286,7 @@ fn test_claim_refund_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1322,7 +1322,7 @@ fn test_extend_deadline_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1351,7 +1351,7 @@ fn test_read_only_functions_when_paused() {
     let client = EscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin, &admin, &100u32);
+    client.initialize(&admin, &admin, &100u32, &604800u64);
 
     let user = Address::generate(&env);
     let freelancer = Address::generate(&env);
@@ -1576,10 +1576,10 @@ fn test_initialize_and_admin_controls() {
     let treasury = Address::generate(&env);
     let fee_bps = 250; // 2.5%
 
-    escrow.initialize(&admin, &treasury, &fee_bps);
+    escrow.initialize(&admin, &treasury, &fee_bps, &604800u64);
 
     // Initialized twice should fail
-    let result = escrow.try_initialize(&admin, &treasury, &fee_bps);
+    let result = escrow.try_initialize(&admin, &treasury, &fee_bps, &604800u64);
     assert!(result.is_err());
 
     escrow.set_fee_bps(&500);
@@ -1599,7 +1599,7 @@ fn test_fee_deduction_single_approval() {
     let admin = Address::generate(&env);
     let treasury = Address::generate(&env);
     let fee_bps: u32 = 500; // 5%
-    escrow.initialize(&admin, &treasury, &fee_bps);
+    escrow.initialize(&admin, &treasury, &fee_bps, &604800u64);
 
     let token_admin = Address::generate(&env);
     // Correction 2 & 3
@@ -1638,7 +1638,7 @@ fn test_fee_deduction_batch_approval() {
     let admin = Address::generate(&env);
     let treasury = Address::generate(&env);
     let fee_bps: u32 = 1000; // 10% (max)
-    escrow.initialize(&admin, &treasury, &fee_bps);
+    escrow.initialize(&admin, &treasury, &fee_bps, &604800u64);
 
     let token_admin = Address::generate(&env);
     // Correction 2 & 3
@@ -1685,11 +1685,85 @@ fn test_fee_cap_enforcement() {
     let treasury = Address::generate(&env);
 
     // Should fail if > 10% during initialize
-    let result = escrow.try_initialize(&admin, &treasury, &1001);
+    let result = escrow.try_initialize(&admin, &treasury, &1001, &604800u64);
     assert!(result.is_err());
 
     // Should fail if > 10% during update
-    escrow.initialize(&admin, &treasury, &0);
+    escrow.initialize(&admin, &treasury, &0, &604800u64);
     let result = escrow.try_set_fee_bps(&1001);
     assert!(result.is_err());
+}
+
+/// Verifies that fund_job rejects a job whose stored total_amount is LESS than
+/// the sum of its milestone amounts (underfunding). Uses InvalidAmount (#24).
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn test_fund_job_underfunding_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|l| l.timestamp = 1000);
+
+    let contract_id = env.register_contract(None, EscrowContract);
+    let escrow = EscrowContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let freelancer = Address::generate(&env);
+    let token = env.register_contract(None, MockToken);
+
+    // Two milestones summing to 100
+    let milestones = vec![
+        &env,
+        (String::from_str(&env, "Phase 1"), 60_i128, JOB_DEADLINE),
+        (String::from_str(&env, "Phase 2"), 40_i128, JOB_DEADLINE),
+    ];
+
+    let job_id = escrow.create_job(&user, &freelancer, &token, &milestones, &JOB_DEADLINE, &GRACE_PERIOD);
+
+    // Corrupt total_amount to 50 — less than the milestone sum of 100
+    env.as_contract(&contract_id, || {
+        let key = crate::DataKey::Job(job_id);
+        let mut job: crate::Job = env.storage().persistent().get(&key).unwrap();
+        job.total_amount = 50;
+        env.storage().persistent().set(&key, &job);
+    });
+
+    // Must fail with InvalidAmount
+    escrow.fund_job(&job_id, &user);
+}
+
+/// Verifies that fund_job rejects a job whose stored total_amount is MORE than
+/// the sum of its milestone amounts (overfunding). Uses InvalidAmount (#24).
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn test_fund_job_overfunding_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().with_mut(|l| l.timestamp = 1000);
+
+    let contract_id = env.register_contract(None, EscrowContract);
+    let escrow = EscrowContractClient::new(&env, &contract_id);
+
+    let user = Address::generate(&env);
+    let freelancer = Address::generate(&env);
+    let token = env.register_contract(None, MockToken);
+
+    // Two milestones summing to 100
+    let milestones = vec![
+        &env,
+        (String::from_str(&env, "Phase 1"), 60_i128, JOB_DEADLINE),
+        (String::from_str(&env, "Phase 2"), 40_i128, JOB_DEADLINE),
+    ];
+
+    let job_id = escrow.create_job(&user, &freelancer, &token, &milestones, &JOB_DEADLINE, &GRACE_PERIOD);
+
+    // Corrupt total_amount to 150 — more than the milestone sum of 100
+    env.as_contract(&contract_id, || {
+        let key = crate::DataKey::Job(job_id);
+        let mut job: crate::Job = env.storage().persistent().get(&key).unwrap();
+        job.total_amount = 150;
+        env.storage().persistent().set(&key, &job);
+    });
+
+    // Must fail with InvalidAmount
+    escrow.fund_job(&job_id, &user);
 }
