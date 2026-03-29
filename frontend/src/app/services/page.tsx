@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { Search, SlidersHorizontal, X, LayoutGrid } from "lucide-react";
+import Link from "next/link";
 import axios from "axios";
 import ServiceCard from "@/components/ServiceCard";
 import Pagination from "@/components/Pagination";
@@ -129,12 +130,9 @@ function ServicesContent() {
               </span>
             )}
           </button>
-          <button
-            onClick={() => (window.location.href = "/services/new")}
-            className="btn-primary"
-          >
+          <Link href="/services/new" className="btn-primary">
             Post a Service
-          </button>
+          </Link>
         </div>
       </div>
 
