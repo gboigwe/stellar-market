@@ -338,3 +338,8 @@ model SavedJob {
   @@index([freelancerId])
   @@index([jobId])
 }
+
+model SystemState {
+  key   String @id
+  value String
+}
