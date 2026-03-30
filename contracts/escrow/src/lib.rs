@@ -520,6 +520,9 @@ impl EscrowContract {
         if job.status != JobStatus::Funded && job.status != JobStatus::InProgress {
             return Err(EscrowError::InvalidStatus);
         }
+        if job.status == JobStatus::Disputed {
+            return Err(EscrowError::InvalidStatus);
+        }
 
         let mut milestones = job.milestones.clone();
         let milestone = milestones
@@ -572,6 +575,10 @@ impl EscrowContract {
 
         if job.client != client {
             return Err(EscrowError::Unauthorized);
+        }
+
+        if job.status == JobStatus::Disputed {
+            return Err(EscrowError::InvalidStatus);
         }
 
         let mut milestones = job.milestones.clone();
@@ -633,11 +640,19 @@ impl EscrowContract {
         env.storage().persistent().set(&get_job_key(job_id), &job);
         bump_job_ttl(&env, job_id);
 
-        // Emit event
+        // Emit milestone approved event
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("milestone")),
             (job_id, milestone_id, client),
         );
+
+        // Emit PaymentReleased event when job reaches Completed status
+        if all_approved {
+            env.events().publish(
+                (symbol_short!("escrow"), Symbol::new(&env, "pmt_released")),
+                (job_id, job.freelancer, freelancer_amount),
+            );
+        }
 
         Ok(())
     }
@@ -663,6 +678,10 @@ impl EscrowContract {
 
         if job.client != client {
             return Err(EscrowError::Unauthorized);
+        }
+
+        if job.status == JobStatus::Disputed {
+            return Err(EscrowError::InvalidStatus);
         }
 
         // Validate all milestone indices before making any state changes
@@ -747,6 +766,14 @@ impl EscrowContract {
             (symbol_short!("escrow"), symbol_short!("batch")),
             (job_id, milestone_indices, total_released),
         );
+
+        // Emit PaymentReleased event when job reaches Completed status
+        if all_approved {
+            env.events().publish(
+                (symbol_short!("escrow"), Symbol::new(&env, "pmt_released")),
+                (job_id, job.freelancer, total_released),
+            );
+        }
 
         Ok(total_released)
     }
