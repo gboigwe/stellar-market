@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/Toast";
-import { User, Settings, Mail, FileText, Link as LinkIcon, Loader2, ShieldCheck, ShieldOff, Copy, Check } from "lucide-react";
+import { User, Settings, Mail, FileText, Link as LinkIcon, Loader2, ShieldCheck, ShieldOff, Copy, Check, Upload, X, Plus } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
@@ -15,6 +15,7 @@ interface FormErrors {
   email?: string;
   bio?: string;
   avatarUrl?: string;
+  skills?: string;
   general?: string;
 }
 
@@ -23,14 +24,22 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [bio, setBio] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [role, setRole] = useState<"CLIENT" | "FREELANCER">("FREELANCER");
+  // Seed form fields immediately from auth-context user so the form is never
+  // blank while the fresh API fetch is in-flight (or if it fails).
+  const [username, setUsername] = useState(user?.username ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [bio, setBio] = useState(user?.bio ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
+  const [role, setRole] = useState<"CLIENT" | "FREELANCER">(user?.role ?? "FREELANCER");
+  const [skills, setSkills] = useState<string[]>(user?.skills ?? []);
+  const [newSkill, setNewSkill] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string>("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [isPageLoading, setIsPageLoading] = useState(true);
+  // Only show the full-page loader when there is no cached data to show yet.
+  const [isPageLoading, setIsPageLoading] = useState(!user);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // ─── 2FA State ──────────────────────────────────────────────────────────────
   const [twoFAEnabled, setTwoFAEnabled] = useState(false);
@@ -52,7 +61,8 @@ export default function SettingsPage() {
     }
   }, [authLoading, token, router]);
 
-  // Fetch latest profile data and pre-fill form
+  // Fetch the latest profile from the API and overwrite local state so any
+  // server-side changes (e.g. from another device) are reflected immediately.
   useEffect(() => {
     if (!token) return;
 
@@ -62,14 +72,20 @@ export default function SettingsPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = res.data;
-        setUsername(data.username || "");
-        setEmail(data.email || "");
-        setBio(data.bio || "");
-        setAvatarUrl(data.avatarUrl || "");
-        setRole(data.role || "FREELANCER");
-        setTwoFAEnabled(data.twoFactorEnabled || false);
+        // Always overwrite with fresh server values.
+        setUsername(data.username ?? "");
+        setEmail(data.email ?? "");
+        setBio(data.bio ?? "");
+        setAvatarUrl(data.avatarUrl ?? "");
+        setRole(data.role ?? "FREELANCER");
+        setSkills(data.skills ?? []);
+        setTwoFAEnabled(data.twoFactorEnabled ?? false);
       } catch {
-        toast.error("Failed to load profile data.");
+        // If the fetch fails we still have the context values pre-filled —
+        // only show an error if there was nothing pre-loaded at all.
+        if (!user) {
+          toast.error("Failed to load profile data.");
+        }
       } finally {
         setIsPageLoading(false);
       }
@@ -106,6 +122,78 @@ export default function SettingsPage() {
     return Object.keys(newErrors).length === 0;
   }
 
+  function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleAvatarUpload() {
+    if (!avatarFile || !token) return;
+
+    setIsUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('avatar', avatarFile);
+
+      const res = await axios.post(`${API_URL}/users/me/avatar`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setAvatarUrl(res.data.avatarUrl);
+      updateUser({ avatarUrl: res.data.avatarUrl });
+      setAvatarFile(null);
+      setAvatarPreview("");
+      toast.success('Avatar uploaded successfully!');
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const message = error.response?.data?.error || 'Failed to upload avatar';
+      toast.error(message);
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }
+
+  function addSkill() {
+    const trimmed = newSkill.trim();
+    if (!trimmed) return;
+    
+    if (skills.includes(trimmed)) {
+      toast.error('Skill already added');
+      return;
+    }
+
+    if (skills.length >= 20) {
+      toast.error('Maximum 20 skills allowed');
+      return;
+    }
+
+    setSkills([...skills, trimmed]);
+    setNewSkill("");
+  }
+
+  function removeSkill(skill: string) {
+    setSkills(skills.filter(s => s !== skill));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
@@ -117,6 +205,7 @@ export default function SettingsPage() {
       const payload: Record<string, any> = { // eslint-disable-line @typescript-eslint/no-explicit-any
         username,
         role,
+        skills,
       };
       if (email) payload.email = email;
       else payload.email = null;
@@ -342,6 +431,124 @@ export default function SettingsPage() {
                 />
                 <span className="text-theme-text text-xs">Preview</span>
               </div>
+            )}
+          </div>
+
+          {/* Avatar Upload */}
+          <div>
+            <label className="block text-sm font-medium text-theme-heading mb-2">
+              <span className="flex items-center gap-2">
+                <Upload size={14} />
+                Upload Avatar
+              </span>
+            </label>
+            <div className="flex items-center gap-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFileChange}
+                className="hidden"
+                id="avatar-upload"
+              />
+              <label
+                htmlFor="avatar-upload"
+                className="btn-secondary cursor-pointer flex items-center gap-2 text-sm"
+              >
+                <Upload size={16} />
+                Choose File
+              </label>
+              {avatarFile && (
+                <button
+                  type="button"
+                  onClick={handleAvatarUpload}
+                  disabled={isUploadingAvatar}
+                  className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50"
+                >
+                  {isUploadingAvatar ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Upload
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+            {avatarPreview && (
+              <div className="mt-3 flex items-center gap-3">
+                <Image
+                  src={avatarPreview}
+                  alt="Avatar preview"
+                  width={48}
+                  height={48}
+                  className="w-12 h-12 rounded-full object-cover border border-theme-border"
+                  unoptimized
+                />
+                <span className="text-theme-text text-xs">Preview</span>
+              </div>
+            )}
+            <p className="text-theme-text text-xs mt-2">
+              Max file size: 5MB. Supported formats: JPG, PNG, GIF
+            </p>
+          </div>
+
+          {/* Skills */}
+          <div>
+            <label className="block text-sm font-medium text-theme-heading mb-2">
+              Skills
+            </label>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={newSkill}
+                onChange={(e) => setNewSkill(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addSkill();
+                  }
+                }}
+                className="input-field flex-1"
+                placeholder="Add a skill (e.g., React, Node.js)"
+                maxLength={50}
+              />
+              <button
+                type="button"
+                onClick={addSkill}
+                className="btn-secondary flex items-center gap-2 text-sm"
+              >
+                <Plus size={16} />
+                Add
+              </button>
+            </div>
+            {skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill, idx) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1.5 bg-theme-card border border-theme-border rounded-full text-sm text-theme-text flex items-center gap-2"
+                  >
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => removeSkill(skill)}
+                      className="text-theme-error hover:text-theme-error/80"
+                      aria-label={`Remove ${skill}`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-theme-text text-sm">No skills added yet</p>
+            )}
+            {errors.skills && (
+              <p className="text-theme-error text-xs mt-1">{errors.skills}</p>
             )}
           </div>
 

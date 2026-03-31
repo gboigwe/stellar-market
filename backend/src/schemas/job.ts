@@ -48,17 +48,17 @@ export const getJobsQuerySchema = paginationSchema.extend({
   status: z.string().optional(),
   minBudget: z.coerce.number().positive().optional(),
   maxBudget: z.coerce.number().positive().optional(),
-  clientId: z.string().uuid().optional(),
+  clientId: z.string().min(1).optional(),
   sort: z.enum(["newest", "oldest", "budget_high", "budget_low"]).optional(),
   postedAfter: z.string().optional(),
 });
 
 export const getJobByIdParamSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1, "ID is required"),
 })
   .or(
     z.object({
-      jobId: z.string().uuid(),
+      jobId: z.string().min(1, "Job ID is required"),
     }),
   )
   .transform((params) => {
@@ -68,4 +68,11 @@ export const getJobByIdParamSchema = z.object({
 
 export const updateJobStatusSchema = z.object({
   status: jobStatusSchema,
+});
+
+export const getSavedJobsQuerySchema = paginationSchema.extend({
+  search: z.string().optional(),
+  skill: z.string().optional(),
+  minBudget: z.coerce.number().positive().optional(),
+  maxBudget: z.coerce.number().positive().optional(),
 });

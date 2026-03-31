@@ -616,6 +616,18 @@
                         "val": {
                           "bool": false
                         }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
+                              "symbol": "ProposalExpiry"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "u64": 604800
+                        }
                       }
                     ]
                   }
@@ -1281,6 +1293,9 @@
                 },
                 {
                   "u32": 1000
+                },
+                {
+                  "u64": 604800
                 }
               ]
             }
@@ -2235,6 +2250,42 @@
                       "u32": 1
                     }
                   ]
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 3000
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "escrow"
+              },
+              {
+                "symbol": "pmt_released"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u64": 1
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
                 },
                 {
                   "i128": {

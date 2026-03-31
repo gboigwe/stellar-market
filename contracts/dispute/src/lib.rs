@@ -112,6 +112,7 @@ enum DataKey {
     Admin,
     EscrowContract,
     Paused,
+    SlashAmount,
 }
 
 fn require_not_paused(env: &Env) -> Result<(), DisputeError> {
@@ -140,6 +141,9 @@ fn require_admin(env: &Env, admin: &Address) -> Result<(), DisputeError> {
 }
 
 const MIN_VOTER_REPUTATION: u32 = 300;
+
+/// Default reputation points slashed from the losing party after a resolved dispute.
+const DEFAULT_SLASH_AMOUNT: u64 = 50;
 
 const MIN_TTL_THRESHOLD: u32 = 1_000;
 const MIN_TTL_EXTEND_TO: u32 = 10_000;
@@ -331,6 +335,9 @@ impl DisputeContract {
             .instance()
             .set(&DataKey::EscrowContract, &escrow_contract);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::SlashAmount, &DEFAULT_SLASH_AMOUNT);
 
         bump_dispute_count_ttl(&env);
 
@@ -442,6 +449,7 @@ impl DisputeContract {
     }
 
     /// Raise a dispute on a job. Either the client or freelancer can initiate.
+    #[allow(clippy::too_many_arguments)]
     pub fn raise_dispute(
         env: Env,
         job_id: u64,
@@ -514,7 +522,9 @@ impl DisputeContract {
     }
 
     /// Cast a vote on a dispute. Voters cannot be the client or freelancer.
-    /// Voters must have sufficient reputation to participate (if reputation system is initialized).
+    /// If the reputation system is initialized, voters must meet the minimum
+    /// reputation threshold. When no reputation contract is configured, voting
+    /// proceeds without a reputation check to allow graceful degradation.
     pub fn cast_vote(
         env: Env,
         dispute_id: u64,
@@ -655,7 +665,7 @@ impl DisputeContract {
         escrow: Address,
     ) -> Result<DisputeStatus, DisputeError> {
         require_not_paused(&env)?;
-        
+
         let mut dispute: Dispute = env
             .storage()
             .persistent()
@@ -710,6 +720,55 @@ impl DisputeContract {
                     resolution.into_val(&env),
                 ],
             );
+        }
+
+        // Slash the losing party's staked reputation (best-effort: skip if reputation
+        // contract is not configured or the call fails).
+        if resolution != DisputeResolution::Escalate {
+            if let Some(reputation_contract) = env
+                .storage()
+                .instance()
+                .get::<DataKey, Address>(&DataKey::ReputationContract)
+            {
+                let slash_amount: u64 = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::SlashAmount)
+                    .unwrap_or(DEFAULT_SLASH_AMOUNT);
+
+                let admin: Address = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::Admin)
+                    .ok_or(DisputeError::NotInitialized)?;
+
+                let loser = match resolution {
+                    DisputeResolution::ClientWins => dispute.freelancer.clone(),
+                    DisputeResolution::FreelancerWins => dispute.client.clone(),
+                    // RefundBoth: slash the initiator as the bad-faith party
+                    DisputeResolution::RefundBoth => dispute.initiator.clone(),
+                    DisputeResolution::Escalate => unreachable!(),
+                };
+
+                // Best-effort cross-contract call — ignore errors so resolution is never blocked
+                let _ = env.try_invoke_contract::<(), soroban_sdk::Error>(
+                    &reputation_contract,
+                    &Symbol::new(&env, "slash_stake"),
+                    vec![
+                        &env,
+                        admin.into_val(&env),
+                        loser.clone().into_val(&env),
+                        dispute.job_id.into_val(&env),
+                        slash_amount.into_val(&env),
+                    ],
+                );
+
+                // Emit StakeSlashed event regardless of whether the cross-contract call succeeded
+                env.events().publish(
+                    (symbol_short!("dispute"), Symbol::new(&env, "stk_slashed")),
+                    (dispute.job_id, loser, slash_amount),
+                );
+            }
         }
 
         env.storage()

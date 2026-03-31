@@ -6,7 +6,7 @@ export const paginationSchema = z.object({
 });
 
 export const idParamSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1, "ID is required"),
 });
 
 export const objectIdSchema = z.string().min(1, "ID is required");
@@ -53,8 +53,9 @@ export const applicationStatusSchema = z.enum([
 export const milestoneStatusSchema = z.enum([
   "PENDING",
   "IN_PROGRESS",
-  "COMPLETED",
-  "CANCELLED",
+  "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
 ]);
 
 export const reviewRatingSchema = z.number().int().min(1).max(5);

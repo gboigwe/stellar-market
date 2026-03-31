@@ -74,7 +74,7 @@ fn setup_in_progress_job(
 }
 
 fn create_token(env: &Env, admin: &Address) -> Address {
-    env.register_stellar_asset_contract(admin.clone())
+    env.register_stellar_asset_contract_v2(admin.clone()).address()
 }
 
 fn mint(env: &Env, token_addr: &Address, admin: &Address, to: &Address, amount: i128) {
@@ -816,6 +816,80 @@ fn test_tier_downgrade_no_badge_removal() {
 }
 
 #[test]
+fn test_get_reputation_with_decay() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let escrow_id = env.register_contract(None, EscrowContract);
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let reputation_client = ReputationContractClient::new(&env, &reputation_id);
+
+    // Initialize with 50% decay per year
+    let admin = Address::generate(&env);
+    reputation_client.initialize(&admin, &50);
+    reputation_client.set_token(&admin, &Address::generate(&env)); // Needs a token set for transfers
+
+    let reviewer = Address::generate(&env);
+    let reviewee = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_addr = create_token(&env, &token_admin);
+    mint(&env, &token_addr, &token_admin, &reviewer, 100_000_000);
+
+    // Set token in reputation contract to match the job token
+    reputation_client.set_token(&admin, &token_addr);
+
+    setup_completed_job(&env, &escrow_id, 1u64, &reviewer, &reviewee, &token_addr);
+
+    // Initial review at t=0
+    env.ledger().set(soroban_sdk::testutils::LedgerInfo {
+        timestamp: 0,
+        protocol_version: 20,
+        sequence_number: 100,
+        network_id: [0; 32],
+        base_reserve: 10,
+        min_temp_entry_ttl: 10,
+        min_persistent_entry_ttl: 10,
+        max_entry_ttl: 100000,
+    });
+
+    reputation_client.submit_review(
+        &escrow_id,
+        &reviewer,
+        &reviewee,
+        &1u64,
+        &4u32,
+        &String::from_str(&env, "Good"),
+        &MIN_STAKE,
+    );
+
+    // At t=0, score should be raw
+    let rep0 = reputation_client.get_reputation(&reviewee);
+    assert_eq!(rep0.total_score, 4 * MIN_STAKE as u64);
+    assert_eq!(rep0.total_weight, MIN_STAKE as u64);
+
+    // Advance time by 1 year (31,536,000 seconds)
+    // Decay is 50%, so weight should be 50% of MIN_STAKE
+    env.ledger().set(soroban_sdk::testutils::LedgerInfo {
+        timestamp: 31_536_000,
+        protocol_version: 20,
+        sequence_number: 100,
+        network_id: [0; 32],
+        base_reserve: 10,
+        min_temp_entry_ttl: 10,
+        min_persistent_entry_ttl: 10,
+        max_entry_ttl: 100000,
+    });
+    
+    let rep1 = reputation_client.get_reputation(&reviewee);
+    let expected_weight = (MIN_STAKE as u64) / 2;
+    let expected_score = 4 * expected_weight;
+    
+    assert_eq!(rep1.total_weight, expected_weight);
+    assert_eq!(rep1.total_score, expected_score);
+    assert_eq!(rep1.review_count, 1);
+}
+
+#[test]
 fn test_get_badges_empty() {
     let env = Env::default();
     let reputation_id = env.register_contract(None, ReputationContract);
@@ -1216,4 +1290,85 @@ fn test_referral_bonus_not_granted_twice() {
     // Referrer stats should NOT have increased (bonus paid only once per referred user)
     let subsequent_stats = reputation_client.get_referral_stats(&referrer);
     assert_eq!(initial_stats.earned_bonus, subsequent_stats.earned_bonus);
+}
+
+/// Verifies that submitting a first review for a (reviewer, job_id) pair succeeds
+/// and updates the reviewee's reputation correctly.
+#[test]
+fn test_first_review_succeeds_and_updates_reputation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let escrow_id = env.register_contract(None, EscrowContract);
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let reputation_client = ReputationContractClient::new(&env, &reputation_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_addr = create_token(&env, &token_admin);
+    mint(&env, &token_addr, &token_admin, &client_addr, 100_000_000);
+
+    setup_completed_job(&env, &escrow_id, 1u64, &client_addr, &freelancer_addr, &token_addr);
+
+    reputation_client.submit_review(
+        &escrow_id,
+        &client_addr,
+        &freelancer_addr,
+        &1u64,
+        &5u32,
+        &String::from_str(&env, "Excellent work!"),
+        &MIN_STAKE,
+    );
+
+    let rep = reputation_client.get_reputation(&freelancer_addr);
+    assert_eq!(rep.review_count, 1);
+    assert_eq!(rep.total_score, 5 * MIN_STAKE as u64);
+    assert_eq!(rep.total_weight, MIN_STAKE as u64);
+}
+
+/// Verifies that a second submit_review call with the same (reviewer, job_id)
+/// is rejected with AlreadyReviewed (contract error #2), preventing score inflation.
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_duplicate_review_rejected_with_already_reviewed() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let escrow_id = env.register_contract(None, EscrowContract);
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let reputation_client = ReputationContractClient::new(&env, &reputation_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token_addr = create_token(&env, &token_admin);
+    mint(&env, &token_addr, &token_admin, &client_addr, 100_000_000);
+
+    setup_completed_job(&env, &escrow_id, 1u64, &client_addr, &freelancer_addr, &token_addr);
+
+    // First submission succeeds
+    reputation_client.submit_review(
+        &escrow_id,
+        &client_addr,
+        &freelancer_addr,
+        &1u64,
+        &5u32,
+        &String::from_str(&env, "Great work!"),
+        &MIN_STAKE,
+    );
+
+    // Advance past the rate-limit window so RateLimitExceeded does not fire first
+    env.ledger().with_mut(|l| l.sequence_number = 200);
+
+    // Second submission for the same (reviewer, job_id) must return AlreadyReviewed
+    reputation_client.submit_review(
+        &escrow_id,
+        &client_addr,
+        &freelancer_addr,
+        &1u64,
+        &5u32,
+        &String::from_str(&env, "Duplicate attempt!"),
+        &MIN_STAKE,
+    );
 }

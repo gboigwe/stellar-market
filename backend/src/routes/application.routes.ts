@@ -44,7 +44,7 @@ router.post(
         .json({ error: "Job is not accepting applications." });
     }
     if (job.clientId === req.userId) {
-      return res.status(400).json({ error: "Cannot apply to your own job." });
+      return res.status(400).json({ error: "You cannot apply to your own job." });
     }
 
     const existing = await prisma.application.findUnique({
@@ -262,6 +262,32 @@ router.put(
     });
 
     res.json(updated);
+  }),
+);
+
+// Withdraw (delete) a pending application — applicant only
+router.delete(
+  "/applications/:id",
+  authenticate,
+  validate({ params: getApplicationByIdParamSchema }),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = req.params.id as string;
+
+    const application = await prisma.application.findUnique({ where: { id } });
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found." });
+    }
+    if (application.freelancerId !== req.userId) {
+      return res.status(403).json({ error: "Not authorized." });
+    }
+    if (application.status !== "PENDING") {
+      return res.status(400).json({ error: "Cannot withdraw an accepted or rejected application." });
+    }
+
+    await prisma.application.delete({ where: { id } });
+
+    res.status(204).send();
   }),
 );
 
