@@ -165,7 +165,7 @@ router.get(
         maxAmount,
       } = req.query;
 
-      const skip = (page - 1) * limit;
+      const skip = (Number(page) - 1) * Number(limit);
 
       // Build filter
       const where: any = {
@@ -204,7 +204,7 @@ router.get(
         prisma.transaction.findMany({
           where,
           skip,
-          take: limit,
+          take: Number(limit),
           orderBy: { createdAt: "desc" },
           include: {
             job: {
@@ -230,7 +230,7 @@ router.get(
           page,
           limit,
           total,
-          totalPages: Math.ceil(total / limit),
+          totalPages: Math.ceil(total / Number(limit)),
         },
       });
     } catch (error) {
@@ -347,7 +347,7 @@ router.get(
       const jobId = req.params.jobId as string;
       const { page = 1, limit = 20 } = req.query as any;
 
-      const skip = (page - 1) * limit;
+      const skip = (Number(page) - 1) * Number(limit);
 
       // Verify job exists and user has access
       const job = await prisma.job.findUnique({
@@ -372,7 +372,7 @@ router.get(
         prisma.transaction.findMany({
           where: { jobId },
           skip,
-          take: limit,
+          take: Number(limit),
           orderBy: { createdAt: "asc" },
           include: {
             milestone: {

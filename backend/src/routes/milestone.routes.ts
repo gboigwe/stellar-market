@@ -279,6 +279,16 @@ router.patch(
       data: { status },
     });
 
+    // Emit Socket.IO event for real-time updates
+    const { getIo } = await import("../socket");
+    const io = getIo();
+    io.to(`job:${updated.jobId}`).emit("milestone:status_changed", {
+      milestoneId: updated.id,
+      jobId: updated.jobId,
+      status: updated.status,
+      updatedAt: new Date(),
+    });
+
     // Notify the client when freelancer submits milestone
     if (isFreelancer && status === "SUBMITTED") {
       await NotificationService.sendNotification({
