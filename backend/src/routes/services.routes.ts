@@ -69,7 +69,7 @@ router.get(
       page,
       totalPages: Math.ceil(total / limit),
     });
-  })
+  }),
 );
 
 // GET /api/services/:id — public
@@ -87,7 +87,7 @@ router.get(
     }
 
     res.json(service);
-  })
+  }),
 );
 
 // POST /api/services — freelancer only
@@ -124,7 +124,7 @@ router.post(
     });
 
     res.status(201).json(service);
-  })
+  }),
 );
 
 // PUT /api/services/:id — owner only
@@ -153,7 +153,7 @@ router.put(
     });
 
     res.json(updated);
-  })
+  }),
 );
 
 // DELETE /api/services/:id — owner only
@@ -177,7 +177,7 @@ router.delete(
 
     await prisma.service.delete({ where: { id: req.params.id as string } });
     res.json({ message: "Service deleted successfully." });
-  })
+  }),
 );
 
 export default router;

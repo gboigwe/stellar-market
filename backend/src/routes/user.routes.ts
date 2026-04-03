@@ -219,6 +219,74 @@ router.get(
   }),
 );
 
+router.get(
+  "/:id/reviews",
+  validate({ params: getUserByIdParamSchema }),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = req.params.id as string;
+    const query = req.query as { type?: string; page?: string; limit?: string };
+    const type = query.type === "given" ? "given" : "received";
+    const page = parseInt(query.page || "1", 10);
+    const limit = parseInt(query.limit || "10", 10);
+    const skip = (page - 1) * limit;
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const where = type === "given" ? { reviewerId: id } : { revieweeId: id };
+
+    const [reviews, total] = await Promise.all([
+      prisma.review.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          reviewer: { select: { id: true, username: true, avatarUrl: true } },
+          reviewee: { select: { id: true, username: true, avatarUrl: true } },
+          job: { select: { id: true, title: true } },
+        },
+      }),
+      prisma.review.count({ where }),
+    ]);
+
+    const data = reviews.map((r) => {
+      const targetUser = type === "given" ? r.reviewee : r.reviewer;
+      return {
+        id: r.id,
+        jobId: r.jobId,
+        jobTitle: r.job.title,
+        reviewer: {
+          id: targetUser.id,
+          name: targetUser.username,
+          avatarUrl: targetUser.avatarUrl,
+        },
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.createdAt,
+      };
+    });
+
+    const meta: any = {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+
+    if (type === "received") {
+      meta.averageRating = user.averageRating || 0;
+    }
+
+    res.json({
+      data,
+      meta,
+    });
+  }),
+);
+
 // Get user profile by ID
 router.get(
   "/:id",
