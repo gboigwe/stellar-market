@@ -32,6 +32,7 @@ import {
 } from "recharts";
 import StatusBadge from "@/components/StatusBadge";
 import { useAuth } from "@/context/AuthContext";
+import { useSocket } from "@/context/SocketContext";
 import { Job, Application, PaginatedResponse } from "@/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";

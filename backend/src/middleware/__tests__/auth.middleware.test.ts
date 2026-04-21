@@ -39,6 +39,7 @@ describe("authenticate middleware", () => {
   it("sets req.userId and req.userRole for valid token", async () => {
     const req = {
       headers: { authorization: "Bearer valid.token" },
+      path: "/dashboard",
     } as AuthRequest;
 
     (jwt.verify as jest.Mock).mockReturnValue({ userId: "user-123" });
